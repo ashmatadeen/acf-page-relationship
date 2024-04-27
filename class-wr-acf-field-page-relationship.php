@@ -110,7 +110,7 @@ class WP_ACF_Field_Page_Relationship extends \acf_field {
 	 * These settings appear on the ACF “Edit Field Group” admin page when
 	 * setting up the field.
 	 *
-	 * @param array $field
+	 * @param array $field field configuration array.
 	 * @return void
 	 */
 	public function render_field_settings( $field ) {
@@ -158,14 +158,8 @@ class WP_ACF_Field_Page_Relationship extends \acf_field {
 	 * @return void
 	 */
 	public function render_field( $field ) {
-		// Debug output to show what field data is available.
-		echo '<pre>';
-		print_r( $field );
-		echo '</pre>';
-
 		$posts = $this->get_matching_pages( $field['page_template'] );
 
-		// Change Field into a select.
 		$field['type']     = 'select';
 		$field['ui']       = 1;
 		$field['ajax']     = 1;
@@ -177,19 +171,36 @@ class WP_ACF_Field_Page_Relationship extends \acf_field {
 				if ( is_object( $post ) ) {
 					// append to choices .
 					$field['choices'][ $post->ID ] = get_the_title( $post );
-				} else {
-					// append to choices .
-					$field['choices'][ $post ] = $post;
 				}
 			}
 		}
 
-		echo '<pre>';
-		print_r( $field['choices'] );
-		echo '</pre>';
+		$field_options = '';
+		if ( $field['allow_null'] ) {
+			$field_options .= '<option value="0">' . __( '- Select a page -', 'acf' ) . '</option>';
+		}
 
-		// render.
-		acf_render_field( $field );
+		foreach ( $field['choices'] as $post_id => $title ) {
+			if ( empty( $title ) ) {
+				continue;
+			}
+
+			$selected = '';
+
+			if ( ( is_array( $field['value'] ) && in_array( $post_id, $field['value'], true ) ) || (int) $field['value'] === (int) $post_id ) {
+				$selected = ' selected';
+			}
+
+			$field_options .= '<option value="' . $post_id . '"' . $selected . '>' . get_the_title( $post_id ) . '</option>';
+		}
+
+		$field_html  = '';
+		$field_id    = str_replace( array( '[', ']' ), array( '-', '' ), $field['name'] );
+		$field_html .= '<select id="' . $field_id . '" name="' . $field['name'] . '">';
+		$field_html .= $field_options;
+		$field_html .= '</select>';
+
+		echo apply_filters( 'wr-acf-page-relationship/field_html', $field_html, $field, $field_options );
 	}
 
 	/**
@@ -200,25 +211,6 @@ class WP_ACF_Field_Page_Relationship extends \acf_field {
 	 * @return void
 	 */
 	public function input_admin_enqueue_scripts() {
-		$url     = trailingslashit( $this->env['url'] );
-		$version = $this->env['version'];
-
-		wp_register_script(
-			'wr-page-relationship',
-			"{$url}assets/js/field.js",
-			array( 'acf-input' ),
-			$version
-		);
-
-		wp_register_style(
-			'wr-page-relationship',
-			"{$url}assets/css/field.css",
-			array( 'acf-input' ),
-			$version
-		);
-
-		wp_enqueue_script( 'wr-page-relationship' );
-		wp_enqueue_style( 'wr-page-relationship' );
 	}
 
 	/**
@@ -257,6 +249,10 @@ class WP_ACF_Field_Page_Relationship extends \acf_field {
 					'value' => $page_template,
 				);
 			}
+			if ( count( $meta_query_parts ) > 1 ) {
+				$meta_query_parts['relation'] = 'OR';
+			}
+
 			$args['meta_query'] = $meta_query_parts;
 		}
 
