@@ -1,6 +1,8 @@
 <?php
 /**
- * Registration logic for the new ACF field type.
+ * Registration logic for the Page Relationship field type.
+ *
+ * @package ACF Page Relationship Field
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -8,6 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 add_action( 'init', 'wr_include_acf_field_page_relationship' );
+
 /**
  * Registers the ACF field type.
  */
@@ -18,5 +21,5 @@ function wr_include_acf_field_page_relationship() {
 
 	require_once __DIR__ . '/class-wr-acf-field-page-relationship.php';
 
-	acf_register_field_type( 'wr_acf_field_page_relationship' );
+	acf_register_field_type( 'WP_ACF_Field_Page_Relationship' );
 }

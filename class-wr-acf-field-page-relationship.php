@@ -1,6 +1,8 @@
 <?php
 /**
- * Defines the custom field type class.
+ * Defines the custom field type class for the page template field type.
+ *
+ * @package ACF Page Relationship Field
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -8,9 +10,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * wr_acf_field_page_relationship class.
+ * WP_ACF_Field_Page_Relationship class.
  */
-class wr_acf_field_page_relationship extends \acf_field {
+class WP_ACF_Field_Page_Relationship extends \acf_field {
 	/**
 	 * Controls field type visibilty in REST requests.
 	 *
@@ -41,19 +43,19 @@ class wr_acf_field_page_relationship extends \acf_field {
 		 *
 		 * For public-facing UI. May contain spaces.
 		 */
-		$this->label = __( 'Page relationship', 'wr' );
+		$this->label = __( 'Page relationship', 'acf' );
 
 		/**
 		 * The category the field appears within in the field type picker.
 		 */
-		$this->category = 'basic'; // basic | content | choice | relational | jquery | layout | CUSTOM GROUP NAME
+		$this->category = 'relational';
 
 		/**
 		 * Field type Description.
 		 *
 		 * For field descriptions. May contain spaces.
 		 */
-		$this->description = __( 'Page relationship field, filterable by page template', 'wr' );
+		$this->description = __( 'Page relationship field, filterable by page template', 'acf' );
 
 		/**
 		 * Field type Doc URL.
@@ -72,9 +74,7 @@ class wr_acf_field_page_relationship extends \acf_field {
 		/**
 		 * Defaults for your custom user-facing settings for this field type.
 		 */
-		$this->defaults = array(
-			'font_size'	=> 14,
-		);
+		$this->defaults = array();
 
 		/**
 		 * Strings used in JavaScript code.
@@ -86,7 +86,7 @@ class wr_acf_field_page_relationship extends \acf_field {
 		 * ```
 		 */
 		$this->l10n = array(
-			'error'	=> __( 'Error! Please enter a higher value', 'wr' ),
+			'error' => __( 'Error! Please enter a higher value', 'acf' ),
 		);
 
 		$this->env = array(
@@ -120,11 +120,30 @@ class wr_acf_field_page_relationship extends \acf_field {
 		acf_render_field_setting(
 			$field,
 			array(
-				'label'			=> __( 'Font Size','wr' ),
-				'instructions'	=> __( 'Customise the input font size','wr' ),
-				'type'			=> 'number',
-				'name'			=> 'font_size',
-				'append'		=> 'px',
+				'label'        => __( 'Filter by page template', 'acf' ),
+				'instructions' => '',
+				'type'         => 'select',
+				'name'         => 'page_template',
+				'choices'      => $this->get_page_templates(),
+				'multiple'     => 1,
+				'ui'           => 1,
+				'allow_null'   => 1,
+				'placeholder'  => __( 'All page templates', 'acf' ),
+			)
+		);
+
+		// Render a field setting that will tell us if an empty field is allowed or not.
+		acf_render_field_setting(
+			$field,
+			array(
+				'label'   => __( 'Allow Null?', 'acf' ),
+				'type'    => 'radio',
+				'name'    => 'allow_null',
+				'choices' => array(
+					1 => __( 'Yes', 'acf' ),
+					0 => __( 'No', 'acf' ),
+				),
+				'layout'  => 'horizontal',
 			)
 		);
 
@@ -144,16 +163,33 @@ class wr_acf_field_page_relationship extends \acf_field {
 		print_r( $field );
 		echo '</pre>';
 
-		// Display an input field that uses the 'font_size' setting.
-		?>
-		<input
-			type="text"
-			class="setting-font-size"
-			name="<?php echo esc_attr($field['name']) ?>"
-			value="<?php echo esc_attr($field['value']) ?>"
-			style="font-size:<?php echo esc_attr( $field['font_size'] ) ?>px;"
-		/>
-		<?php
+		$posts = $this->get_matching_pages( $field['page_template'] );
+
+		// Change Field into a select.
+		$field['type']     = 'select';
+		$field['ui']       = 1;
+		$field['ajax']     = 1;
+		$field['choices']  = array();
+		$field['multiple'] = 0;
+
+		if ( ! empty( $posts ) ) {
+			foreach ( $posts as $post ) {
+				if ( is_object( $post ) ) {
+					// append to choices .
+					$field['choices'][ $post->ID ] = get_the_title( $post );
+				} else {
+					// append to choices .
+					$field['choices'][ $post ] = $post;
+				}
+			}
+		}
+
+		echo '<pre>';
+		print_r( $field['choices'] );
+		echo '</pre>';
+
+		// render.
+		acf_render_field( $field );
 	}
 
 	/**
@@ -183,5 +219,52 @@ class wr_acf_field_page_relationship extends \acf_field {
 
 		wp_enqueue_script( 'wr-page-relationship' );
 		wp_enqueue_style( 'wr-page-relationship' );
+	}
+
+	/**
+	 * Get page templates available to WordPress.
+	 *
+	 * @return mixed
+	 */
+	protected function get_page_templates() {
+
+		$templates = get_page_templates();
+		if ( is_array( $templates ) ) {
+			return array_flip( $templates );
+		}
+
+		return false;
+	}
+
+	/**
+	 * Get pages that match the page template(s) selected.
+	 *
+	 * @param array $page_templates the list of page template names to match against.
+	 * @return mixed
+	 */
+	private function get_matching_pages( $page_templates ) {
+		$args = array(
+			'post_type'      => 'page',
+			'post_status'    => 'publish',
+			'posts_per_page' => -1,
+		);
+
+		if ( ! empty( $page_templates ) ) {
+			$meta_query_parts = array();
+			foreach ( $page_templates as $page_template ) {
+				$meta_query_parts[] = array(
+					'key'   => '_wp_page_template',
+					'value' => $page_template,
+				);
+			}
+			$args['meta_query'] = $meta_query_parts;
+		}
+
+		$results = new WP_Query( $args );
+		if ( is_array( $results->posts ) && count( $results->posts ) > 0 ) {
+			return $results->posts;
+		} else {
+			return array();
+		}
 	}
 }
